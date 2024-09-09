@@ -11,25 +11,40 @@ struct RootView: View {
     struct Link2: View {
         var body: some View {
             Text("content")
-                .onViewDidAppear { controller in
+                .onViewDidAppear { _ in
 //                    print("come in")
                 }
         }
     }
 
     struct Link1: View {
+        @State var opacity: CGFloat?
+        @State var fromAlpha: CGFloat = 0
+        @State var toAlpha: CGFloat = 0
+        @AppStorage("detail_opacity") var barOpacity: Double = 0.0
+
         var body: some View {
-            List {
-                ForEach(0 ..< 20, id: \.self) { _ in
-                    NavigationLink {
-                        Link2()
-                    } label: {
-                        Text("link2")
+            ScrollView {
+                VStack {
+                    ForEach(0 ..< 20, id: \.self) { _ in
+                        NavigationLink {
+                            Link2()
+                        } label: {
+                            Text("link2")
+                        }
+                        .frame(height: 50)
                     }
-                    .frame(height: 50)
                 }
+                .background(GeometryReader { proxy in
+                    Color.clear.onChange(of: proxy.frame(in: .global).minY) { v in
+                        let progress = v / 50
+                        opacity = max(min(-progress, 1), 0)
+                    }
+                })
             }
             .onViewDidAppear { controller in
+                controller.fromAlpha = fromAlpha
+                controller.toAlpha = toAlpha
 //                print("come in")
             }
         }

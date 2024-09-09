@@ -107,8 +107,8 @@ extension UINavigationController: UIGestureRecognizerDelegate {
         let fromViewController = coordinator.viewController(forKey: .from)
         let toViewController = coordinator.viewController(forKey: .to)
         // Bg Alpha
-        let fromAlpha = objc_getAssociatedObject(fromViewController!, &UIViewController.navBarBgAlphaKey) as? CGFloat ?? 1.0
-        let toAlpha = objc_getAssociatedObject(toViewController!, &UIViewController.navBarBgAlphaKey) as? CGFloat ?? 1.0
+        let fromAlpha = fromViewController?.fromAlpha ?? 1.0 // objc_getAssociatedObject(fromViewController!, &UIViewController.navBarBgAlphaKey) as? CGFloat ?? 1.0
+        let toAlpha = toViewController?.toAlpha ?? 1.0 // objc_getAssociatedObject(toViewController!, &UIViewController.navBarBgAlphaKey) as? CGFloat ?? 1.0
         let newAlpha = fromAlpha + (toAlpha - fromAlpha) * percentComplete
         print("update from:\(fromAlpha) to:\(toAlpha) newAlpha:\(newAlpha)")
         setNeedsNavigationBackground(alpha: newAlpha)
@@ -217,7 +217,6 @@ struct HookView: UIViewControllerRepresentable {
             let fromViewController = coordinator.viewController(forKey: .from)
             let toViewController = coordinator.viewController(forKey: .to)
 
-            print("viewDidAppear", fromViewController?.description, toViewController?.description, fromViewController?.hid, toViewController?.hid)
             onViewDidAppear?(self)
         }
 
@@ -312,6 +311,30 @@ public extension UIViewController {
     static var navBarBgAlphaKey: Void?
     var hid: Int {
         hashValue
+    }
+
+    private static var innerFromAlpha: CGFloat?
+    private static var innerToAlpha: CGFloat?
+    var fromAlpha: CGFloat {
+        get {
+            UIViewController.innerFromAlpha ?? 1.0
+        }
+        set {
+            UIViewController.innerFromAlpha = newValue
+            let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar ?? navigationController?.navigationBar
+            navigationController?.setNeedsNavigationBackground(alpha: newValue, bar: navigationBar)
+        }
+    }
+
+    var toAlpha: CGFloat {
+        get {
+            UIViewController.innerToAlpha ?? 1.0
+        }
+        set {
+            UIViewController.innerToAlpha = newValue
+            let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar ?? navigationController?.navigationBar
+            navigationController?.setNeedsNavigationBackground(alpha: newValue, bar: navigationBar)
+        }
     }
 
     /** 导航栏背景透明度**/

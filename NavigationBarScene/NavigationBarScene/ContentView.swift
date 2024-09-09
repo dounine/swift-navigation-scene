@@ -9,16 +9,31 @@ import SwiftUI
 
 struct RootView: View {
     struct Link2: View {
+        @State var viewController: UIViewController? = nil
         var body: some View {
-            Text("content")
-                .onViewDidAppear { _ in
-//                    print("come in")
+            ScrollView {
+                ForEach(0 ..< 20, id: \.self) { _ in
+                    Text("content")
+                        .frame(height: 50)
                 }
+            }
+            .onViewDidAppear {
+                viewController = $0
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        print("come in", viewController?.alpha)
+                    } label: {
+                        Text("alpha值")
+                    }
+                }
+            }
         }
     }
 
     struct Link1: View {
-        @State var opacity: CGFloat?
+//        @State var opacity: CGFloat?
         @State var fromAlpha: CGFloat = 0
         @State var toAlpha: CGFloat = 0
         @State var viewController: UIViewController? = nil
@@ -33,6 +48,8 @@ struct RootView: View {
                             Link2()
                                 .onAppear {
                                     back = true
+                                    viewController?.alphaToggle()
+                                    viewController?.alpha = 1.0
                                 }
                         } label: {
                             Text("link2")
@@ -45,17 +62,20 @@ struct RootView: View {
                         let progress = -v / 100
                         barOpacity = max(min(progress, 1), 0)
                         viewController?.fromAlpha = barOpacity
+                        viewController?.alpha = barOpacity
                     }
                 })
             }
             .ignoresSafeArea(edges: .top)
             .onViewDidAppear { controller in
+                print("onViewDidAppear barOpacity:\(barOpacity)")
                 viewController = controller
                 if back {
-                    controller.fromAlpha = barOpacity
+                    viewController?.fromAlpha = barOpacity
                 } else {
-                    controller.toAlpha = 0
+                    viewController?.toAlpha = 0
                 }
+                viewController?.alpha = barOpacity
             }
         }
     }

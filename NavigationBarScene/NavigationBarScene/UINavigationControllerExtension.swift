@@ -117,7 +117,7 @@ extension UINavigationController: UIGestureRecognizerDelegate {
 //        let fromColor = objc_getAssociatedObject(fromViewController!, &nameKeys.navBarTintColor) as? UIColor ?? .black
 //        let toColor = objc_getAssociatedObject(toViewController!, &nameKeys.navBarTintColor) as? UIColor ?? .black
 //        let newColor = averageColor(fromColor: fromColor, toColor: toColor, percent: percentComplete)
-//        navigationBar.tintColor = newColor
+//        navigationBar.tintColor = .clear
 //        navigationBar.titleTextAttributes = topViewController.titleTextAttributes
         et_updateInteractiveTransition(percentComplete)
         coordinator.notifyWhenInteractionChanges { [weak self] context in
@@ -151,7 +151,7 @@ extension UINavigationController: UIGestureRecognizerDelegate {
 
     @objc func et_popToViewController(_ viewController: UIViewController, animated: Bool) -> [UIViewController]? {
         print("导航返回\(viewController.navigationItem.hashValue)")
-        setNeedsNavigationBackground(alpha: viewController.navBarBgAlpha)
+        setNeedsNavigationBackground(alpha: viewController.toAlpha)
 //        navigationBar.tintColor = viewController.navBarTintColor
 //        navigationBar.titleTextAttributes = viewController.titleTextAttributes
         return et_popToViewController(topViewController!, animated: animated)
@@ -163,7 +163,7 @@ extension UINavigationController: UIGestureRecognizerDelegate {
     }
 
     @objc func et_popToRootViewControllerAnimated(_ animated: Bool) -> [UIViewController]? {
-        setNeedsNavigationBackground(alpha: viewControllers.first?.navBarBgAlpha ?? 0)
+//        setNeedsNavigationBackground(alpha: viewControllers.first?.navBarBgAlpha ?? 0)
 //        navigationBar.tintColor = viewControllers.first?.navBarTintColor
 //        navigationBar.titleTextAttributes = viewControllers.first?.titleTextAttributes
         return et_popToRootViewControllerAnimated(animated)
@@ -176,15 +176,23 @@ extension UINavigationController: UIGestureRecognizerDelegate {
         guard let barBackgroundView = (bar ?? navigationBar).subviews.first else { return }
 
         barBackgroundView.subviews.filter { $0.isKind(of: UIVisualEffectView.self) }.forEach { $0.alpha = alpha }
-        barBackgroundView.subviews.filter { $0.isKind(of: UIVisualEffectView.self) }.first?.isHidden = alpha == 0
 
         guard let backgroundEffectView = barBackgroundView.subviews.first as? UIVisualEffectView else { return }
         if navigationBar.backgroundImage(for: .default) == nil {
-            backgroundEffectView.subviews[0].alpha = alpha
+            backgroundEffectView.subviews.first?.alpha = alpha
             return
         }
 
-        barBackgroundView.alpha = alpha
+//        barBackgroundView.alpha = alpha
+    }
+
+    fileprivate func getNavigationBackgroundAlpha(bar: UINavigationBar? = nil) -> CGFloat {
+        guard let barBackgroundView = (bar ?? navigationBar).subviews.first else { return 1.0 }
+
+        guard let alpha = barBackgroundView.subviews.filter({ $0.isKind(of: UIVisualEffectView.self) }).first?.alpha else {
+            return 1.0
+        }
+        return alpha
     }
 }
 
@@ -210,13 +218,6 @@ struct HookView: UIViewControllerRepresentable {
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            guard let coordinator = transitionCoordinator else {
-                return
-            }
-
-            let fromViewController = coordinator.viewController(forKey: .from)
-            let toViewController = coordinator.viewController(forKey: .to)
-
             onViewDidAppear?(self)
         }
 
@@ -284,24 +285,25 @@ extension UINavigationController: UINavigationBarDelegate {
 //    }
 
     private func dealInteractionChanges(_ context: UIViewControllerTransitionCoordinatorContext) {
-        let animations: (UITransitionContextViewControllerKey) -> Void = {
-            let nowAlpha = context.viewController(forKey: $0)?.navBarBgAlpha ?? 0
+        let animations: (CGFloat) -> Void = {
+            let nowAlpha = $0 // context.viewController(forKey: $0)?.navBarBgAlpha ?? 0
             self.setNeedsNavigationBackground(alpha: nowAlpha)
 //            self.navigationBar.titleTextAttributes = context.viewController(forKey: $0)?.titleTextAttributes
 //            self.navigationBar.tintColor = context.viewController(forKey: $0)?.navBarTintColor
         }
 
         if context.isCancelled { // 手势失败
+            print("手势失败")
             let cancelDuration: TimeInterval = context.transitionDuration * Double(context.percentComplete)
-
             UIView.animate(withDuration: cancelDuration) {
-                animations(.from)
+                animations(context.viewController(forKey: .from)?.fromAlpha ?? 1.0)
             }
         } else { // 手势成功
+            print("手势成功")
             let finishDuration: TimeInterval = context.transitionDuration * Double(1 - context.percentComplete)
 
             UIView.animate(withDuration: finishDuration) {
-                animations(.to)
+                animations(context.viewController(forKey: .to)?.fromAlpha ?? 1.0)
             }
         }
     }
@@ -321,9 +323,13 @@ public extension UIViewController {
         }
         set {
             UIViewController.innerFromAlpha = newValue
-            let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar ?? navigationController?.navigationBar
-            navigationController?.setNeedsNavigationBackground(alpha: newValue, bar: navigationBar)
         }
+    }
+
+    func alphaToggle() {
+        let tmp = UIViewController.innerFromAlpha ?? 1.0
+        UIViewController.innerFromAlpha = UIViewController.innerToAlpha ?? 1.0
+        UIViewController.innerToAlpha = tmp
     }
 
     var toAlpha: CGFloat {
@@ -332,41 +338,50 @@ public extension UIViewController {
         }
         set {
             UIViewController.innerToAlpha = newValue
+        }
+    }
+
+    var alpha: CGFloat {
+        get {
+            let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar
+            return navigationController?.getNavigationBackgroundAlpha(bar: navigationBar) ?? 1.0
+        }
+        set {
             let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar ?? navigationController?.navigationBar
             navigationController?.setNeedsNavigationBackground(alpha: newValue, bar: navigationBar)
         }
     }
 
     /** 导航栏背景透明度**/
-    var navBarBgAlpha: CGFloat {
-        get {
-            guard let alpha = objc_getAssociatedObject(navigationController!, &UIViewController.navBarBgAlphaKey) as? CGFloat else {
-                return 1.0
-            }
-            return alpha
-        }
-        set {
-            let alpha = max(min(newValue, 1), 0) // 必须在 0~1的范围
-            objc_setAssociatedObject(navigationController!, &UIViewController.navBarBgAlphaKey, alpha, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-            // Update UI
-            let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar ?? navigationController?.navigationBar
-            navigationController?.setNeedsNavigationBackground(alpha: alpha, bar: navigationBar)
-//            print("set alpha:\(alpha) \(navigationBar)")
-//            guard let coordinator = navigationController?.topViewController?.transitionCoordinator else {
-            ////                et_updateInteractiveTransition(percentComplete)
-//                return
+//    var navBarBgAlpha: CGFloat {
+//        get {
+//            guard let alpha = objc_getAssociatedObject(navigationController!, &UIViewController.navBarBgAlphaKey) as? CGFloat else {
+//                return 1.0
 //            }
-//            print("获取\(objc_getAssociatedObject(navigationController, &nameKeys.navBarBgAlpha) as? CGFloat)")
-//
-//            let fromViewController = coordinator.viewController(forKey: .from)
-//            let toViewController = coordinator.viewController(forKey: .to)
-//            print("获取from \(fromViewController?.navBarBgAlpha)")
-//            print("获取to \(toViewController?.navBarBgAlpha)")
-//            objc_setAssociatedObject(toViewController, &nameKeys.navBarBgAlpha, alpha, .OBJC_ASSOCIATION_COPY_NONATOMIC)
-//            toViewController?.navBarBgAlpha = alpha
-//            print(fromViewController?.navBarBgAlpha, toViewController?.navBarBgAlpha)
-        }
-    }
+//            return alpha
+//        }
+//        set {
+//            let alpha = max(min(newValue, 1), 0) // 必须在 0~1的范围
+//            objc_setAssociatedObject(navigationController!, &UIViewController.navBarBgAlphaKey, alpha, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+//            // Update UI
+//            let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar ?? navigationController?.navigationBar
+//            navigationController?.setNeedsNavigationBackground(alpha: alpha, bar: navigationBar)
+    ////            print("set alpha:\(alpha) \(navigationBar)")
+    ////            guard let coordinator = navigationController?.topViewController?.transitionCoordinator else {
+//            ////                et_updateInteractiveTransition(percentComplete)
+    ////                return
+    ////            }
+    ////            print("获取\(objc_getAssociatedObject(navigationController, &nameKeys.navBarBgAlpha) as? CGFloat)")
+    ////
+    ////            let fromViewController = coordinator.viewController(forKey: .from)
+    ////            let toViewController = coordinator.viewController(forKey: .to)
+    ////            print("获取from \(fromViewController?.navBarBgAlpha)")
+    ////            print("获取to \(toViewController?.navBarBgAlpha)")
+    ////            objc_setAssociatedObject(toViewController, &nameKeys.navBarBgAlpha, alpha, .OBJC_ASSOCIATION_COPY_NONATOMIC)
+    ////            toViewController?.navBarBgAlpha = alpha
+    ////            print(fromViewController?.navBarBgAlpha, toViewController?.navBarBgAlpha)
+//        }
+//    }
 
     /** barTintColor颜色**/
 //    var navBarTintColor: UIColor {

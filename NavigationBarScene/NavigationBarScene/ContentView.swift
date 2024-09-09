@@ -21,6 +21,7 @@ struct RootView: View {
         @State var opacity: CGFloat?
         @State var fromAlpha: CGFloat = 0
         @State var toAlpha: CGFloat = 0
+        @State var viewController: UIViewController? = nil
         @AppStorage("detail_opacity") var barOpacity: Double = 0.0
 
         var body: some View {
@@ -31,18 +32,21 @@ struct RootView: View {
                             Link2()
                         } label: {
                             Text("link2")
+                                .frame(height: 50)
                         }
-                        .frame(height: 50)
                     }
                 }
                 .background(GeometryReader { proxy in
                     Color.clear.onChange(of: proxy.frame(in: .global).minY) { v in
-                        let progress = v / 50
-                        opacity = max(min(-progress, 1), 0)
+                        let progress = -v / 100
+                        opacity = max(min(progress, 1), 0)
+                        viewController?.toAlpha = opacity!
                     }
                 })
             }
+            .ignoresSafeArea(edges: .top)
             .onViewDidAppear { controller in
+                viewController = controller
                 controller.fromAlpha = fromAlpha
                 controller.toAlpha = toAlpha
 //                print("come in")

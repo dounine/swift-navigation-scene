@@ -12,13 +12,22 @@ struct RootView: View {
         @State var viewController: UIViewController? = nil
         var body: some View {
             ScrollView {
-                ForEach(0 ..< 20, id: \.self) { _ in
-                    Text("content")
-                        .frame(height: 50)
+                VStack {
+                    ForEach(0 ..< 20, id: \.self) { _ in
+                        Text("content")
+                            .frame(height: 50)
+                    }
                 }
+                .background(GeometryReader { proxy in
+                    Color.clear
+                        .onChange(of: proxy.frame(in: .global).minY) { _ in
+                            viewController?.fromAlphaUpdate()
+                        }
+                })
             }
             .onViewDidAppear {
                 viewController = $0
+                viewController?.fromAlpha = $0.alpha
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -39,17 +48,21 @@ struct RootView: View {
         @State var viewController: UIViewController? = nil
         @AppStorage("detail_opacity") var barOpacity: Double = 0.0
         @State var back = false
-
+        @State var isActive = false
         var body: some View {
             ScrollView {
                 VStack {
                     ForEach(0 ..< 20, id: \.self) { _ in
-                        NavigationLink {
+                        NavigationLink(isActive: $isActive) {
                             Link2()
                                 .onAppear {
                                     back = true
+                                    print("come in")
                                     viewController?.alphaToggle()
-                                    viewController?.alpha = 1.0
+                                    viewController?.alpha = 1
+//                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+//                                        viewController?.alpha = 1
+//                                    }
                                 }
                         } label: {
                             Text("link2")

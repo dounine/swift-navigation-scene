@@ -67,6 +67,22 @@ extension UINavigationController: UIGestureRecognizerDelegate {
         popView.addGestureRecognizer(fullScreenPoGesture)
     }
 
+    @objc func handlePanGesture(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: gesture.view)
+        let progress = translation.x/gesture.view!.bounds.size.width
+
+        switch gesture.state {
+        case .began:
+            print("Pan began")
+        case .changed:
+            print("Pan changed: \(progress)")
+        case .ended:
+            print("Pan ended")
+        default:
+            break
+        }
+    }
+
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if viewControllers.count > 1 {
             return true
@@ -120,11 +136,12 @@ extension UINavigationController: UIGestureRecognizerDelegate {
 //        navigationBar.tintColor = .clear
 //        navigationBar.titleTextAttributes = topViewController.titleTextAttributes
         et_updateInteractiveTransition(percentComplete)
-        coordinator.notifyWhenInteractionChanges { [weak self] context in
-            if !context.isCancelled {
-                self?.dealInteractionChanges(context)
-            }
-        }
+//        coordinator.notifyWhenInteractionChanges { [weak self] context in
+//            if !context.isCancelled {
+//                print("come ----")
+//                self?.dealInteractionChanges(context)
+//            }
+//        }
     }
 
     // Calculate the middle Color with translation percent
@@ -160,6 +177,7 @@ extension UINavigationController: UIGestureRecognizerDelegate {
     @objc func et_pushViewController(_ viewController: UIViewController, animated: Bool) {
         print("导航进入\(viewController.description)")
         et_pushViewController(viewController, animated: animated)
+       
     }
 
     @objc func et_popToRootViewControllerAnimated(_ animated: Bool) -> [UIViewController]? {
@@ -184,6 +202,22 @@ extension UINavigationController: UIGestureRecognizerDelegate {
         }
 
 //        barBackgroundView.alpha = alpha
+    }
+
+    fileprivate func resetNavigationBackground(bar: UINavigationBar? = nil) {
+        guard var barBackgroundView = (bar ?? navigationBar).subviews.first else { return }
+
+        if var effectView = barBackgroundView.subviews.filter { $0.isKind(of: UIVisualEffectView.self) }.first {
+            effectView = UIVisualEffectView(frame: effectView.frame)
+        }
+
+        guard let backgroundEffectView = barBackgroundView.subviews.first as? UIVisualEffectView else { return }
+        if navigationBar.backgroundImage(for: .default) == nil {
+            backgroundEffectView.subviews.first?.alpha = alpha
+            return
+        }
+
+        barBackgroundView.alpha = alpha
     }
 
     fileprivate func getNavigationBackgroundAlpha(bar: UINavigationBar? = nil) -> CGFloat {
@@ -284,7 +318,7 @@ extension UINavigationController: UINavigationBarDelegate {
 //        return true
 //    }
 
-    private func dealInteractionChanges(_ context: UIViewControllerTransitionCoordinatorContext) {
+    func dealInteractionChanges(_ context: UIViewControllerTransitionCoordinatorContext) {
         let animations: (CGFloat) -> Void = {
             let nowAlpha = $0 // context.viewController(forKey: $0)?.navBarBgAlpha ?? 0
             self.setNeedsNavigationBackground(alpha: nowAlpha)
@@ -293,17 +327,35 @@ extension UINavigationController: UINavigationBarDelegate {
         }
 
         if context.isCancelled { // 手势失败
-            print("手势失败")
+//            print("手势失败")
             let cancelDuration: TimeInterval = context.transitionDuration * Double(context.percentComplete)
             UIView.animate(withDuration: cancelDuration) {
                 animations(context.viewController(forKey: .from)?.fromAlpha ?? 1.0)
             }
         } else { // 手势成功
-            print("手势成功")
             let finishDuration: TimeInterval = context.transitionDuration * Double(1 - context.percentComplete)
+            if let to = context.viewController(forKey: .to) {
+                let toAlpha = objc_getAssociatedObject(to, &UIViewController.alphaAnimationKey) as? CGFloat ?? 1.0
+                if to.toAlpha == toAlpha {
+                    return
+                }
+                objc_setAssociatedObject(to, &UIViewController.alphaAnimationKey, to.toAlpha, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+                print("手势成功")
+                print(navigationController?.navigationBar.subviews)
+//                let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar
+//                UIView.animate(withDuration: finishDuration) {[self] in
+//                    guard let barBackgroundView = navigationBar?.subviews.first else { return }
 
-            UIView.animate(withDuration: finishDuration) {
-                animations(context.viewController(forKey: .to)?.fromAlpha ?? 1.0)
+//                    barBackgroundView.subviews.filter { $0.isKind(of: UIVisualEffectView.self) }.forEach { $0.alpha = alpha }
+
+                print("come in")
+//                    guard let backgroundEffectView = barBackgroundView.subviews.first as? UIVisualEffectView else { return }
+//                    if navigationBar.backgroundImage(for: .default) == nil {
+//                        backgroundEffectView.subviews.first?.alpha = alpha
+//                        return
+//                    }
+//                    animations(toAlpha)
+//                }
             }
         }
     }
@@ -311,6 +363,7 @@ extension UINavigationController: UINavigationBarDelegate {
 
 public extension UIViewController {
     static var navBarBgAlphaKey: Void?
+    static var alphaAnimationKey: Void?
     var hid: Int {
         hashValue
     }
@@ -326,10 +379,19 @@ public extension UIViewController {
         }
     }
 
+    func fromAlphaUpdate() {
+        UIViewController.innerFromAlpha = alpha
+    }
+
     func alphaToggle() {
         let tmp = UIViewController.innerFromAlpha ?? 1.0
         UIViewController.innerFromAlpha = UIViewController.innerToAlpha ?? 1.0
         UIViewController.innerToAlpha = tmp
+    }
+
+    func alphaReset() {
+        let navigationBar = navigationController?.view.superview?.superview?.superview?.subviews[1] as? UINavigationBar
+        navigationController?.resetNavigationBackground(bar: navigationBar)
     }
 
     var toAlpha: CGFloat {

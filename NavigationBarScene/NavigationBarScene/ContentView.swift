@@ -23,6 +23,7 @@ struct RootView: View {
         @State var toAlpha: CGFloat = 0
         @State var viewController: UIViewController? = nil
         @AppStorage("detail_opacity") var barOpacity: Double = 0.0
+        @State var back = false
 
         var body: some View {
             ScrollView {
@@ -30,6 +31,9 @@ struct RootView: View {
                     ForEach(0 ..< 20, id: \.self) { _ in
                         NavigationLink {
                             Link2()
+                                .onAppear {
+                                    back = true
+                                }
                         } label: {
                             Text("link2")
                                 .frame(height: 50)
@@ -39,17 +43,19 @@ struct RootView: View {
                 .background(GeometryReader { proxy in
                     Color.clear.onChange(of: proxy.frame(in: .global).minY) { v in
                         let progress = -v / 100
-                        opacity = max(min(progress, 1), 0)
-                        viewController?.toAlpha = opacity!
+                        barOpacity = max(min(progress, 1), 0)
+                        viewController?.fromAlpha = barOpacity
                     }
                 })
             }
             .ignoresSafeArea(edges: .top)
             .onViewDidAppear { controller in
                 viewController = controller
-                controller.fromAlpha = fromAlpha
-                controller.toAlpha = toAlpha
-//                print("come in")
+                if back {
+                    controller.fromAlpha = barOpacity
+                } else {
+                    controller.toAlpha = 0
+                }
             }
         }
     }
